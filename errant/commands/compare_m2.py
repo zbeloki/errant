@@ -55,6 +55,12 @@ def parse_args():
         default=0.5,
         type=float)
     parser.add_argument(
+        "--f_average",
+        help="Compute the F score using 'micro' or 'macro' averaging",
+        default="micro",
+        choices=["micro", "macro"]
+    )
+    parser.add_argument(
         "-v",
         "--verbose",
         help="Print verbose output.",
@@ -322,6 +328,13 @@ def computeFScore(tp, fp, fn, beta):
     f = float((1+(beta**2))*p*r)/(((beta**2)*p)+r) if p+r else 0.0
     return round(p, 4), round(r, 4), round(f, 4)
 
+def computeMacroFScore(best_cats, beta):
+    class_scores = [ computeFScore(tp, fp, fn, beta) for tp, fp, fn in best_cats.values() ]
+    p = sum([ p for p, _, _ in class_scores ]) / len(class_scores)
+    r = sum([ r for _, r, _ in class_scores ]) / len(class_scores)
+    f = sum([ f for _, _, f in class_scores ]) / len(class_scores)
+    return round(p, 4), round(r, 4), round(f, 4)
+
 # Input 1-2: Two error category dicts. Key is cat, value is list of TP, FP, FN.
 # Output: The dictionaries combined with cumulative TP, FP, FN.
 def merge_dict(dict1, dict2):
@@ -382,13 +395,20 @@ def print_results(best, best_cats, args):
             print(cat.ljust(14), str(cnts[0]).ljust(8), str(cnts[1]).ljust(8),
                 str(cnts[2]).ljust(8), str(cat_p).ljust(8), str(cat_r).ljust(8), cat_f)
 
+    # Compute F-score
+    if args.f_average == 'micro':
+        f_score = computeFScore(best["tp"], best["fp"], best["fn"], args.beta)
+    else: # args.f_average == 'macro'
+        f_score = computeMacroFScore(best_cats, args.beta)
+
     # Print the overall results.
     print("")
-    print('{:=^46}'.format(title))
-    print("\t".join(["TP", "FP", "FN", "Prec", "Rec", "F"+str(args.beta)]))
+    print('{:=^{width}}'.format(title, width=(46 if args.f_average=='micro' else 52)))
+    print("\t".join(["TP", "FP", "FN", "Prec", "Rec",
+        "F"+str(args.beta)+(" (macro)" if args.f_average=='macro' else "")]))
     print("\t".join(map(str, [best["tp"], best["fp"],
-        best["fn"]]+list(computeFScore(best["tp"], best["fp"], best["fn"], args.beta)))))
-    print('{:=^46}'.format(""))
+        best["fn"]]+list(f_score))))
+    print('{:=^{width}}'.format("", width=(46 if args.f_average=='micro' else 52)))
     print("")
 
 def print_table(table):
